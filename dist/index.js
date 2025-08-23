@@ -1,59 +1,32 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const ws_1 = __importStar(require("ws"));
-const http_1 = __importDefault(require("http"));
-const server = http_1.default.createServer(function (request, response) {
-    console.log(new Date() + " Received request for " + request.url);
-    response.end("hi there");
+const express_1 = __importDefault(require("express"));
+const ws_1 = require("ws");
+const app = (0, express_1.default)();
+const httpServer = app.listen(8080, () => {
+    console.log("Server is listening on port 8080");
 });
-const wss = new ws_1.WebSocketServer({ server });
+const wss = new ws_1.WebSocketServer({ server: httpServer });
+const activeClients = new Set();
 wss.on("connection", function connection(ws) {
-    ws.on("error", console.error);
+    if (activeClients.size >= 2) {
+        ws.close(1000, "Server limit of 2 clients reached");
+        ws.send("Connection closed: Server limit of 2 clients reached");
+        return; // Do not register further events for this client
+    }
+    activeClients.add(ws);
+    ws.send("Connected");
     ws.on("message", function message(data, isBinary) {
         wss.clients.forEach(function each(client) {
-            if (client.readyState === ws_1.default.OPEN) {
+            if (client.readyState === ws_1.WebSocket.OPEN) {
                 client.send(data, { binary: isBinary });
             }
         });
     });
-    ws.send("Hello! Message From Server!!");
-});
-server.listen(8080, function () {
-    console.log(new Date() + " Server is listening on port 8080");
+    ws.on("close", () => {
+        activeClients.delete(ws);
+    });
 });
