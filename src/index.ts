@@ -25,6 +25,31 @@ wss.on("connection", function connection(ws) {
   ws.send(JSON.stringify({ type: "assign", label }));
 
   ws.on("message", function message(data, isBinary) {
+    let msg = null;
+    try {
+      msg = JSON.parse(data.toString());
+    } catch {
+      // If not JSON, treat as normal message.
+    }
+
+    // If received a disconnect_all instruction, close all
+    if (msg && msg.type === "disconnect_all") {
+      // This will disconnect all clients immediately.
+      activeClients.forEach(({ ws: clientWs }) => {
+        if (clientWs.readyState === WebSocket.OPEN) {
+          clientWs.send(
+            JSON.stringify({
+              type: "server",
+              message: "Session ended by user.",
+            })
+          );
+          clientWs.close(4001, "Session ended by user.");
+        }
+      });
+      // Optionally, clear the clients array
+      activeClients.length = 0;
+      return;
+    }
     // Relay this message to all clients WITH the sender's label attached
     activeClients.forEach(({ ws: clientWs }) => {
       if (clientWs.readyState === WebSocket.OPEN) {
