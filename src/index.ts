@@ -7,27 +7,36 @@ const httpServer = app.listen(8080, () => {
 });
 
 const wss = new WebSocketServer({ server: httpServer });
-const activeClients = new Set<WebSocket>();
+
+type ClientWithLabel = { ws: WebSocket; label: "A" | "B" };
+const activeClients: ClientWithLabel[] = [];
 
 wss.on("connection", function connection(ws) {
-  if (activeClients.size >= 2) {
-    ws.close(1000, "Server limit of 2 clients reached");
+  if (activeClients.length >= 2) {
     ws.send("Connection closed: Server limit of 2 clients reached");
-    return; // Do not register further events for this client
+    ws.close(1000, "Server limit of 2 clients reached");
+    return;
   }
 
-  activeClients.add(ws);
-  ws.send("Connected");
+  const label: "A" | "B" = activeClients.length === 0 ? "A" : "B";
+  activeClients.push({ ws, label });
+
+  // Inform the connecting client of their label
+  ws.send(JSON.stringify({ type: "assign", label }));
 
   ws.on("message", function message(data, isBinary) {
-    wss.clients.forEach(function each(client) {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(data, { binary: isBinary });
+    // Relay this message to all clients WITH the sender's label attached
+    activeClients.forEach(({ ws: clientWs }) => {
+      if (clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(
+          JSON.stringify({ type: "chat", label, message: data.toString() })
+        );
       }
     });
   });
 
   ws.on("close", () => {
-    activeClients.delete(ws);
+    const idx = activeClients.findIndex((client) => client.ws === ws);
+    if (idx !== -1) activeClients.splice(idx, 1);
   });
 });
