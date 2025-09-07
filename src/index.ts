@@ -15,6 +15,7 @@ wss.on("connection", function connection(ws) {
   if (activeClients.length >= 2) {
     ws.send("Connection closed: Server limit of 2 clients reached");
     ws.close(1000, "Server limit of 2 clients reached");
+
     return;
   }
 
@@ -30,6 +31,26 @@ wss.on("connection", function connection(ws) {
       msg = JSON.parse(data.toString());
     } catch {
       // If not JSON, treat as normal message.
+    }
+
+    // Typing indicator logic
+    if (msg && msg.type === "typing") {
+      // Find the sender's label
+      const client = activeClients.find((c) => c.ws === ws);
+      if (!client) return;
+      // Send typing status to the other client
+      activeClients.forEach(({ ws: clientWs }) => {
+        if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
+          clientWs.send(
+            JSON.stringify({
+              type: "typing",
+              status: msg.status,
+              label: client.label,
+            })
+          );
+        }
+      });
+      return;
     }
 
     // If received a disconnect_all instruction, close all

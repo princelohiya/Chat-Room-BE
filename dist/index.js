@@ -29,6 +29,24 @@ wss.on("connection", function connection(ws) {
         catch (_a) {
             // If not JSON, treat as normal message.
         }
+        // Typing indicator logic
+        if (msg && msg.type === "typing") {
+            // Find the sender's label
+            const client = activeClients.find((c) => c.ws === ws);
+            if (!client)
+                return;
+            // Send typing status to the other client
+            activeClients.forEach(({ ws: clientWs }) => {
+                if (clientWs !== ws && clientWs.readyState === ws_1.WebSocket.OPEN) {
+                    clientWs.send(JSON.stringify({
+                        type: "typing",
+                        status: msg.status,
+                        label: client.label,
+                    }));
+                }
+            });
+            return;
+        }
         // If received a disconnect_all instruction, close all
         if (msg && msg.type === "disconnect_all") {
             // This will disconnect all clients immediately.
