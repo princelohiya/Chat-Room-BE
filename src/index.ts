@@ -13,9 +13,8 @@ const activeClients: ClientWithLabel[] = [];
 
 wss.on("connection", function connection(ws) {
   if (activeClients.length >= 2) {
-    ws.send("Connection closed: Server limit of 2 clients reached");
-    ws.close(1000, "Server limit of 2 clients reached");
-
+    ws.send(JSON.stringify({ type: "server", message: "Room is full." }));
+    ws.close(4000, "Room is full.");
     return;
   }
 

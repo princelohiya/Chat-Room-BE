@@ -13,9 +13,12 @@ const wss = new ws_1.WebSocketServer({ server: httpServer });
 const activeClients = [];
 wss.on("connection", function connection(ws) {
     if (activeClients.length >= 2) {
-        ws.send("Connection closed: Server limit of 2 clients reached");
-        ws.close(1000, "Server limit of 2 clients reached");
-        return;
+        //check if b is already there
+        if (activeClients.some((client) => client.label === "B")) {
+            ws.send(JSON.stringify({ type: "server", message: "Room is full." }));
+            ws.close(4000, "Room is full.");
+            return;
+        }
     }
     const label = activeClients.length === 0 ? "A" : "B";
     activeClients.push({ ws, label });
