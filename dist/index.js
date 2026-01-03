@@ -12,16 +12,17 @@ const httpServer = app.listen(8080, () => {
 const wss = new ws_1.WebSocketServer({ server: httpServer });
 const activeClients = [];
 wss.on("connection", function connection(ws) {
+    // 1. Check if room is full
     if (activeClients.length >= 2) {
-        //check if b is already there
-        if (activeClients.some((client) => client.label === "B")) {
-            ws.send(JSON.stringify({ type: "server", message: "Room is full." }));
-            ws.close(4000, "Room is full.");
-            return;
-        }
+        ws.send(JSON.stringify({ type: "server", message: "Room is full." }));
+        ws.close(4000, "Room is full.");
+        return;
     }
-    const label = activeClients.length === 0 ? "A" : "B";
+    // 2. FIXED LABEL LOGIC: Check which label is actually missing
+    const takenLabels = activeClients.map((c) => c.label);
+    const label = takenLabels.includes("A") ? "B" : "A";
     activeClients.push({ ws, label });
+    console.log(`User ${label} connected. Total: ${activeClients.length}`);
     // Inform the connecting client of their label
     ws.send(JSON.stringify({ type: "assign", label }));
     ws.on("message", function message(data, isBinary) {
@@ -30,15 +31,15 @@ wss.on("connection", function connection(ws) {
             msg = JSON.parse(data.toString());
         }
         catch (_a) {
-            // If not JSON, treat as normal message.
+            // If not JSON (e.g., Encrypted String), treat as normal chat message.
         }
-        // Typing indicator logic
+        // ---- HANDLERS ----
+        // A. Typing Indicator
         if (msg && msg.type === "typing") {
-            // Find the sender's label
             const client = activeClients.find((c) => c.ws === ws);
             if (!client)
                 return;
-            // Send typing status to the other client
+            // Broadcast to others
             activeClients.forEach(({ ws: clientWs }) => {
                 if (clientWs !== ws && clientWs.readyState === ws_1.WebSocket.OPEN) {
                     clientWs.send(JSON.stringify({
@@ -50,9 +51,8 @@ wss.on("connection", function connection(ws) {
             });
             return;
         }
-        // If received a disconnect_all instruction, close all
+        // B. Disconnect All (Panic Button)
         if (msg && msg.type === "disconnect_all") {
-            // This will disconnect all clients immediately.
             activeClients.forEach(({ ws: clientWs }) => {
                 if (clientWs.readyState === ws_1.WebSocket.OPEN) {
                     clientWs.send(JSON.stringify({
@@ -62,20 +62,26 @@ wss.on("connection", function connection(ws) {
                     clientWs.close(4001, "Session ended by user.");
                 }
             });
-            // Optionally, clear the clients array
-            activeClients.length = 0;
+            activeClients.length = 0; // Clear array immediately
             return;
         }
-        // Relay this message to all clients WITH the sender's label attached
+        // C. Chat Message Relay (Works with E2EE)
+        // We forward the raw data string. If it's encrypted, we forward the ciphertext.
         activeClients.forEach(({ ws: clientWs }) => {
             if (clientWs.readyState === ws_1.WebSocket.OPEN) {
-                clientWs.send(JSON.stringify({ type: "chat", label, message: data.toString() }));
+                clientWs.send(JSON.stringify({
+                    type: "chat",
+                    label,
+                    message: data.toString(), // This sends the Encrypted String
+                }));
             }
         });
     });
     ws.on("close", () => {
         const idx = activeClients.findIndex((client) => client.ws === ws);
-        if (idx !== -1)
+        if (idx !== -1) {
+            console.log(`User ${activeClients[idx].label} disconnected.`);
             activeClients.splice(idx, 1);
+        }
     });
 });
