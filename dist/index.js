@@ -14,7 +14,6 @@ const activeClients = [];
 // 👇 NEW: Helper to send the count to everyone
 function broadcastUserCount() {
     const count = activeClients.length;
-    console.log("Broadcasting count:", count);
     const message = JSON.stringify({ type: "user_count", count: count });
     activeClients.forEach(({ ws }) => {
         if (ws.readyState === ws_1.WebSocket.OPEN) {
@@ -35,10 +34,9 @@ wss.on("connection", function connection(ws) {
     activeClients.push({ ws, label });
     // Inform the connecting client of their label
     ws.send(JSON.stringify({ type: "assign", label }));
-    // 👇 NEW: Update count after adding user
     setTimeout(() => {
         broadcastUserCount();
-    }, 500);
+    }, 50);
     ws.on("message", function message(data, isBinary) {
         let msg = null;
         try {
